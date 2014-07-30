@@ -65,8 +65,10 @@ module Omnibus
       # create the msi
       # Don't care about the 204 return code from light.exe since it's
       # about some expected warnings...
+      # WixUtilExtension allows use of Wix name independent
+      # security principals for use in setting permissions in msi
       execute [
-        'light.exe -nologo -ext WixUIExtension -cultures:en-us',
+        'light.exe -nologo -ext WixUIExtension -ext WixUtilExtension -cultures:en-us',
         "-loc #{resource('localization-en-us.wxl')}",
         'project-files.wixobj source.wixobj',
         "-out \"#{final_pkg}\"",
