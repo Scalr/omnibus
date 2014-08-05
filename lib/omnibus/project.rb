@@ -154,6 +154,7 @@ module Omnibus
       end
 
       if block
+        log.deprecated "msi_parameters should not be used. Instead, use the pacakger dsl."
         @msi_parameters = block
       else
         if null?(val)
@@ -163,6 +164,7 @@ module Omnibus
             @msi_parameters ||= {}
           end
         else
+          log.deprecated "msi_parameters should not be used. Instead, use the pacakger dsl."
           @msi_parameters = val
         end
       end
@@ -675,6 +677,21 @@ module Omnibus
       extra_package_files.dup
     end
     expose :extra_package_file
+
+    def packager(name, &block)
+      @packager ||= {}
+      if !block
+        @packager[name]
+      else
+        case name
+        when :msi
+          @packager[name] = Packager::MSI::DSL.new(self, &block).run!
+        else
+          raise Error, "There are no configuration options available for #{name}"
+        end
+      end
+    end
+    expose :packager
 
     #
     # @!endgroup

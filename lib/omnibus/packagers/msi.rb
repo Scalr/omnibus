@@ -20,9 +20,55 @@ module Omnibus
   # Builds a Windows MSI package (.msi extension)
   #
   class Packager::MSI < Packager::Base
+    class DSL
+      include Packager::DSL
+      attr_reader :msi_parameters
+      attr_reader :wix_candle_extensions
+      attr_reader :wix_light_extensions
+
+      def initialize(project)
+        @msi_parameters = {}
+        @wix_light_extensions = ['WixUIExtension'] # included for backcompat
+        @wix_candle_extensions = []
+        super(project)
+      end
+
+      def msi_parameters(val=NULL, &block)
+        if block && !null?(val)
+          raise Error, 'You cannot specify additional parameters to ' \
+            '#msi_parameters when a block is given'
+        end
+
+        if block
+          @msi_parameters = self.class.evaluate(self, &block)
+        else
+          if null?(val)
+            @project.msi_parameters.merge @msi_parameters
+          else
+            @msi_parameters = val
+          end
+        end
+      end
+      expose :msi_parameters
+
+      def wix_candle_extension(ext)
+        @wix_candle_extensions << ext
+      end
+      expose :wix_candle_extension
+
+      def wix_light_extention(ext)
+        @wix_light_extentions << ext
+      end
+      expose :wix_light_extention
+    end
+
     # !@method msi_parameters
     #   @return (see Project#msi_parameters)
-    def_delegator :@project, :msi_parameters, :msi_parameters
+    def_delegator :config, :msi_parameters, :msi_parameters
+
+    def config
+      @config ||= @project.packager(:msi)
+    end
 
     validate do
       assert_presence!(resource('localization-en-us.wxl'))
@@ -58,6 +104,7 @@ module Omnibus
       # compile with candle.exe
       execute [
         'candle.exe -nologo',
+        config.wix_candle_extensions.map {|e| "-ext '#{e}'"}.join(' '),
         "-dProjectSourceDir=\"#{project.install_dir}\" project-files.wxs",
         "\"#{resource('source.wxs')}\"",
       ].join(' ')
@@ -66,7 +113,9 @@ module Omnibus
       # Don't care about the 204 return code from light.exe since it's
       # about some expected warnings...
       execute [
-        'light.exe -nologo -ext WixUIExtension -cultures:en-us',
+        'light.exe -nologo',
+        config.wix_light_extensions.map {|e| "-ext '#{e}'"}.join(' '),
+        '-cultures:en-us',
         "-loc #{resource('localization-en-us.wxl')}",
         'project-files.wixobj source.wixobj',
         "-out \"#{final_pkg}\"",
