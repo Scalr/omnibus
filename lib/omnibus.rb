@@ -84,6 +84,8 @@ module Omnibus
 
     # TODO - this is really a "compressor"
     autoload :MacDmg, 'omnibus/packagers/mac_dmg'
+
+    autoload :DSL,        'omnibus/packagers/dsl'
   end
 
   class << self
