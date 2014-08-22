@@ -18,6 +18,9 @@
 
 module Omnibus
   class Packager::RPM < Packager::Base
+    # @return [Array]
+    SCRIPTS = %w(pre post preun postun verifyscript pretans posttrans).freeze
+
     id :rpm
 
     setup do
@@ -86,6 +89,106 @@ module Omnibus
     expose :signing_passphrase
 
     #
+    # Set or return the vendor who made this package.
+    #
+    # @example
+    #   vendor "Seth Vargo <sethvargo@gmail.com>"
+    #
+    # @param [String] val
+    #   the vendor who make this package
+    #
+    # @return [String]
+    #   the vendor who make this package
+    #
+    def vendor(val = NULL)
+      if null?(val)
+        @vendor || 'Omnibus <omnibus@getchef.com>'
+      else
+        unless val.is_a?(String)
+          raise InvalidValue.new(:vendor, 'be a String')
+        end
+
+        @vendor = val
+      end
+    end
+    expose :vendor
+
+    #
+    # Set or return the license for this package.
+    #
+    # @example
+    #   license "Apache 2.0"
+    #
+    # @param [String] val
+    #   the license for this package
+    #
+    # @return [String]
+    #   the license for this package
+    #
+    def license(val = NULL)
+      if null?(val)
+        @license || 'unknown'
+      else
+        unless val.is_a?(String)
+          raise InvalidValue.new(:license, 'be a String')
+        end
+
+        @license = val
+      end
+    end
+    expose :license
+
+    #
+    # Set or return the priority for this package.
+    #
+    # @example
+    #   priority "extra"
+    #
+    # @param [String] val
+    #   the priority for this package
+    #
+    # @return [String]
+    #   the priority for this package
+    #
+    def priority(val = NULL)
+      if null?(val)
+        @priority || 'extra'
+      else
+        unless val.is_a?(String)
+          raise InvalidValue.new(:priority, 'be a String')
+        end
+
+        @priority = val
+      end
+    end
+    expose :priority
+
+    #
+    # Set or return the category for this package.
+    #
+    # @example
+    #   category "databases"
+    #
+    # @param [String] val
+    #   the category for this package
+    #
+    # @return [String]
+    #   the category for this package
+    #
+    def category(val = NULL)
+      if null?(val)
+        @category || 'default'
+      else
+        unless val.is_a?(String)
+          raise InvalidValue.new(:category, 'be a String')
+        end
+
+        @category = val
+      end
+    end
+    expose :category
+
+    #
     # @!endgroup
     # --------------------------------------------------
 
@@ -112,10 +215,16 @@ module Omnibus
     # @return [void]
     #
     def write_rpm_spec
-      # Grab a list of all the scripts which exist and should be added
-      scripts = %w(pre post preun postun verifyscript pretans posttrans)
-                  .map    { |name| File.join(project.package_scripts_path, name) }
-                  .select { |path| File.file?(path) }
+      # Create a map of scripts that exist and their contents
+      scripts = SCRIPTS.inject({}) do |hash, name|
+        path = File.join(project.package_scripts_path, name)
+
+        if File.file?(path)
+          hash[name] = File.read(path)
+        end
+
+        hash
+      end
 
       # Get a list of user-declared config files
       config_files = project.config_files.map { |file| rpm_safe(file) }
@@ -123,8 +232,8 @@ module Omnibus
       # Get a list of all files
       files = FileSyncer.glob("#{build_dir}/**/*")
                 .map    { |path| path.gsub("#{build_dir}/", '') }
-                .map    { |path| rpm_safe(path) }
                 .map    { |path| "/#{path}" }
+                .map    { |path| rpm_safe(path) }
                 .reject { |path| config_files.include?(path) }
 
       render_template(resource_path('spec.erb'),
@@ -133,14 +242,14 @@ module Omnibus
           name:           safe_project_name,
           version:        safe_version,
           iteration:      safe_build_iteration,
-          vendor:         'Omnibus <omnibus@getchef.com>', # TODO: make this configurable
-          license:        'unknown', # TODO: make this configurable
+          vendor:         vendor,
+          license:        license,
           architecture:   safe_architecture,
           maintainer:     project.maintainer,
           homepage:       project.homepage,
           description:    project.description,
-          priority:       'extra', # TODO: make this configurable
-          category:       'default', # TODO: make this configurable
+          priority:       priority,
+          category:       category,
           conflicts:      project.conflicts,
           replaces:       project.replaces,
           dependencies:   project.runtime_dependencies,
@@ -196,7 +305,7 @@ module Omnibus
       end
 
       FileSyncer.glob("#{staging_dir}/RPMS/**/*.rpm").each do |rpm|
-        copy_file(rpm, package_dir)
+        copy_file(rpm, Config.package_dir)
       end
     end
 

@@ -32,9 +32,70 @@ module Omnibus
       create_directory("#{staging_dir}/SPECS")
     end
 
-    describe 'DSL' do
-      it 'exposes :signing_passphrase' do
+    describe '#signing_passphrase' do
+      it 'is a DSL method' do
         expect(subject).to have_exposed_method(:signing_passphrase)
+      end
+
+      it 'has a no default value' do
+        expect(subject.signing_passphrase).to be(nil)
+      end
+    end
+
+
+    describe '#vendor' do
+      it 'is a DSL method' do
+        expect(subject).to have_exposed_method(:vendor)
+      end
+
+      it 'has a default value' do
+        expect(subject.vendor).to eq('Omnibus <omnibus@getchef.com>')
+      end
+
+      it 'must be a string' do
+        expect { subject.vendor(Object.new) }.to raise_error(InvalidValue)
+      end
+    end
+
+    describe '#license' do
+      it 'is a DSL method' do
+        expect(subject).to have_exposed_method(:license)
+      end
+
+      it 'has a default value' do
+        expect(subject.license).to eq('unknown')
+      end
+
+      it 'must be a string' do
+        expect { subject.license(Object.new) }.to raise_error(InvalidValue)
+      end
+    end
+
+    describe '#priority' do
+      it 'is a DSL method' do
+        expect(subject).to have_exposed_method(:priority)
+      end
+
+      it 'has a default value' do
+        expect(subject.priority).to eq('extra')
+      end
+
+      it 'must be a string' do
+        expect { subject.priority(Object.new) }.to raise_error(InvalidValue)
+      end
+    end
+
+    describe '#category' do
+      it 'is a DSL method' do
+        expect(subject).to have_exposed_method(:category)
+      end
+
+      it 'has a default value' do
+        expect(subject.category).to eq('default')
+      end
+
+      it 'must be a string' do
+        expect { subject.category(Object.new) }.to raise_error(InvalidValue)
       end
     end
 
@@ -93,13 +154,11 @@ module Omnibus
 
       context 'when scripts are given' do
         before do
-          create_file("#{project_root}/package-scripts/project/pre")
-          create_file("#{project_root}/package-scripts/project/post")
-          create_file("#{project_root}/package-scripts/project/preun")
-          create_file("#{project_root}/package-scripts/project/postun")
-          create_file("#{project_root}/package-scripts/project/verifyscript")
-          create_file("#{project_root}/package-scripts/project/pretans")
-          create_file("#{project_root}/package-scripts/project/posttrans")
+          Packager::RPM::SCRIPTS.each do |name|
+            create_file("#{project_root}/package-scripts/project/#{name}") do
+              "Contents of #{name}"
+            end
+          end
         end
 
         it 'writes the scripts into the spec' do
@@ -107,19 +166,19 @@ module Omnibus
           contents = File.read(spec_file)
 
           expect(contents).to include("%pre")
-          expect(contents).to include("#{project_root}/package-scripts/project/pre")
+          expect(contents).to include("Contents of pre")
           expect(contents).to include("%post")
-          expect(contents).to include("#{project_root}/package-scripts/project/post")
+          expect(contents).to include("Contents of post")
           expect(contents).to include("%preun")
-          expect(contents).to include("#{project_root}/package-scripts/project/preun")
+          expect(contents).to include("Contents of preun")
           expect(contents).to include("%postun")
-          expect(contents).to include("#{project_root}/package-scripts/project/postun")
+          expect(contents).to include("Contents of postun")
           expect(contents).to include("%verifyscript")
-          expect(contents).to include("#{project_root}/package-scripts/project/verifyscript")
+          expect(contents).to include("Contents of verifyscript")
           expect(contents).to include("%pretans")
-          expect(contents).to include("#{project_root}/package-scripts/project/pretans")
+          expect(contents).to include("Contents of pretans")
           expect(contents).to include("%posttrans")
-          expect(contents).to include("#{project_root}/package-scripts/project/posttrans")
+          expect(contents).to include("Contents of posttrans")
         end
       end
 

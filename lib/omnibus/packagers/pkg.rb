@@ -115,7 +115,7 @@ module Omnibus
     # @return [String]
     #
     def final_pkg
-      File.expand_path("#{package_dir}/#{package_name}")
+      File.expand_path("#{Config.package_dir}/#{package_name}")
     end
 
     #
@@ -138,7 +138,7 @@ module Omnibus
     # @return [void]
     #
     def build_component_pkg
-      execute <<-EOH.gsub(/^ {8}/, '')
+      command = <<-EOH.gsub(/^ {8}/, '')
         pkgbuild \\
           --identifier "#{safe_identifier}" \\
           --version "#{safe_version}" \\
@@ -147,6 +147,10 @@ module Omnibus
           --install-location "#{project.install_dir}" \\
           "#{component_pkg}"
       EOH
+
+      Dir.chdir(staging_dir) do
+        shellout!(command)
+      end
     end
 
     #
@@ -189,7 +193,9 @@ module Omnibus
       command << %Q(  "#{final_pkg}")
       command << %Q(\n)
 
-      execute(command)
+      Dir.chdir(staging_dir) do
+        shellout!(command)
+      end
     end
 
     #
@@ -226,9 +232,6 @@ module Omnibus
     # The identifier for this mac package (the com.whatever.thing.whatever).
     # This is a configurable project value, but a default value is calculated if
     # one is not given.
-    #
-    # @todo Make this a packager DSL method and remove it from the top-level
-    #   project configuration.
     #
     # @return [String]
     #
