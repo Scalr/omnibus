@@ -219,7 +219,12 @@ module Omnibus
         compression_switch = 'J' if downloaded_file.end_with?('xz')
         compression_switch = ''  if downloaded_file.end_with?('tar')
 
-        "#{tar} #{compression_switch}xf #{windows_safe_path(downloaded_file)} -C#{Config.source_dir}"
+        if Ohai['platform'] == 'windows'
+          # the quotes here are required to bypass max-31-cymbol-names problem on non-native win shells
+          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{Config.source_dir}\""
+        else  
+          "#{tar} #{compression_switch}xf #{windows_safe_path(downloaded_file)} -C#{Config.source_dir}"
+        end
       end
     end
 
