@@ -221,14 +221,7 @@ module Omnibus
 
         if Ohai['platform'] == 'windows'
           # the quotes here are required to bypass max-31-cymbol-names problem on non-native win shells
-          if system("$PSVersionTable.PSVersion")
-            source  = windows_safe_path(downloaded_file)
-            dest = Config.source_dir
-          elsif system("echo $0")
-            source = downloaded_file.gsub("\\","/").sub("C:", "/C")
-            dest = Config.source_dir.gsub("\\", "/").sub("C:", "/C")    
-          end 
-            "#{tar} #{compression_switch}xf #{source} -C #{dest}"
+          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{Config.source_dir}\""
         else  
           "#{tar} #{compression_switch}xf #{windows_safe_path(downloaded_file)} -C#{Config.source_dir}"
         end
