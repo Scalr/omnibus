@@ -220,10 +220,8 @@ module Omnibus
         compression_switch = ''  if downloaded_file.end_with?('tar')
 
         if Ohai['platform'] == 'windows'
-          # The quotes here are required to bypass max-31-cymbol-names problem on non-native win shells
-          # We'll assume force-local to be safe to use here as well, as for now 
-          # all remote archive ops are handled by the 3d party SW
-          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{windows_safe_path(Config.source_dir)}\" --force-local"
+          # the quotes here are required to bypass max-31-cymbol-names problem on non-native win shells
+          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{windows_safe_path(Config.source_dir)}\""
         else  
           "#{tar} #{compression_switch}xf #{windows_safe_path(downloaded_file)} -C#{Config.source_dir}"
         end
