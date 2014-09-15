@@ -221,7 +221,7 @@ module Omnibus
 
         if Ohai['platform'] == 'windows'
           # the quotes here are required to bypass max-31-cymbol-names problem on non-native win shells
-          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{Config.source_dir}\""
+          "#{tar} #{compression_switch}xf \"#{windows_safe_path(downloaded_file)}\" -C\"#{windows_safe_path(Config.source_dir)}\""
         else  
           "#{tar} #{compression_switch}xf #{windows_safe_path(downloaded_file)} -C#{Config.source_dir}"
         end
