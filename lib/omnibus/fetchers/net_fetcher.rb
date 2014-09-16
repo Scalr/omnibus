@@ -164,7 +164,7 @@ module Omnibus
     # is copied over as a raw file.
     #
     def extract
-      if command == extract_command
+      if command = extract_command
         log.info(log_key) { "Extracting `#{downloaded_file}' to `#{Config.source_dir}'" }
         shellout!(extract_command)
       else
