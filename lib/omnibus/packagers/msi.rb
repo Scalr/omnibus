@@ -191,7 +191,7 @@ module Omnibus
       #  ___|__  _______|_____   ___|___
       # "11.14.0.b20140501194641.561b564" 
       versions = project.build_version.split(/[.+-]/)
-      standardized_version = "#{versions[0..2].join(".")}.b#{versions[5]}.#{versions[8]}"
+      standardized_version = "#{versions[0..2].join(".")}.b#{versions[-4]}.#{versions[-1]}"
       "#{project.name}-#{standardized_version}-#{project.build_iteration}.msi"
     end
 
