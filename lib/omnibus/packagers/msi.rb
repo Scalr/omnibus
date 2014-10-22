@@ -182,17 +182,8 @@ module Omnibus
 
     # @see Base#package_name
     def package_name
-      # we need a build_version to be of a form:
-      # {version}.b{number}.{githash}
-      # that means out of project.build_version being
-      # 11.14.0-alpha.1+20140501194641.git.94.561b564
-      # we should get
-      #  version      number     githash
-      #  ___|__  _______|_____   ___|___
-      # "11.14.0.b20140501194641.561b564"
-      versions = project.build_version.split(/[.+-]/)
-      standardized_version = "#{versions[0..2].join(".")}.#{versions[-1]}"
-      "#{project.name}_#{standardized_version}.msi"
+      # get a version from env var
+      "#{project.name}_#{ENV['MSI_VERSION']}.msi"
     end
 
     #
