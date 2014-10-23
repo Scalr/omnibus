@@ -71,9 +71,12 @@ module Omnibus
 
       # Print out the table body
       version_map.keys.sort.each do |name|
-        version = version_map[name][:version]
+        if name == project.name and windows?
+          version = ENV['MSI_VERSION']
+        else
+          version = version_map[name][:version]
+        end
         version_guid = version_map[name][:version_guid]
-
         default_version = version_map[name][:default_version]
         overridden = version_map[name][:overridden]
 
