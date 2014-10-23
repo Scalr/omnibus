@@ -71,7 +71,7 @@ module Omnibus
 
       # Print out the table body
       version_map.keys.sort.each do |name|
-        if name == project.name and windows?
+        if name == project.name and !!(RUBY_PLATFORM =~ /mswin|mingw|windows/)
           version = ENV['MSI_VERSION']
         else
           version = version_map[name][:version]
