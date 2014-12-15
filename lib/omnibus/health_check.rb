@@ -35,8 +35,6 @@ module Omnibus
       /libutil\.so/,
       /linux-vdso.+/,
       /linux-gate\.so/,
-      /libselinux\.so\.1/,
-      /libsepol\.so\.1/,
     ].freeze
 
     ARCH_WHITELIST_LIBS = [
