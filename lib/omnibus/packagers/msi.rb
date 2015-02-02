@@ -45,9 +45,15 @@ module Omnibus
     build do
       # Harvest the files with heat.exe, recursively generate fragment for
       # project directory
+      if  ["1", "yes", "y"].include? ENV["CI_VERBOSE"]
+        logswitch = "-v"
+      else
+        logswitch = ""
+      end
       Dir.chdir(staging_dir) do
         shellout! <<-EOH.split.join(' ').squeeze(' ').strip
           heat.exe dir "#{windows_safe_path(project.install_dir)}"
+            #{logswitch}
             -nologo -srd -gg -cg ProjectDir
             -dr PROJECTLOCATION
             -var "var.ProjectSourceDir"
@@ -57,6 +63,7 @@ module Omnibus
         # Compile with candle.exe
         shellout! <<-EOH.split.join(' ').squeeze(' ').strip
           candle.exe
+            #{logswitch}
             -nologo
             #{wix_extension_switches(wix_candle_extensions)}
             -dProjectSourceDir="#{windows_safe_path(project.install_dir)}" "project-files.wxs"
@@ -67,6 +74,7 @@ module Omnibus
         # about some expected warnings
         shellout! <<-EOH.split.join(' ').squeeze(' ').strip
           light.exe
+            #{logswitch}
             -nologo
             -ext WixUIExtension
             #{wix_extension_switches(wix_light_extensions)}
