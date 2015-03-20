@@ -233,7 +233,7 @@ module Omnibus
           maintainer:      project.maintainer,
           upgrade_code:    upgrade_code,
           parameters:      parameters,
-          version:         msi_version,
+          version:         "#{ENV['MSI_VERSION']}",
           display_version: msi_display_version,
         }
       )
