@@ -77,7 +77,7 @@ module Omnibus
             #{logswitch}
             -nologo
             -reusecab
-            -cc #{wix_cabinet_cache_path}
+            -cc #{wix_cabinet_cache}
             -ext WixUIExtension
             #{wix_extension_switches(wix_light_extensions)}
             -cultures:en-us
@@ -191,7 +191,7 @@ module Omnibus
         raise InvalidValue.new(:wix_cabinet_cache_path, 'be an String')
       end
 
-      @wix_cabinet_cache_path = path
+      @wix_cabinet_cache = path
     end
     expose :wix_cabinet_cache_path
     #
