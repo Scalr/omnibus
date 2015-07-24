@@ -77,7 +77,7 @@ module Omnibus
             #{logswitch}
             -nologo
             -reusecab
-            -cc #{wix_cabinet_cache}
+            -cc #{windows_safe_path(wix_cabinet_cache)}
             -ext WixUIExtension
             #{wix_extension_switches(wix_light_extensions)}
             -cultures:en-us
@@ -186,12 +186,16 @@ module Omnibus
     end
     expose :wix_candle_extension
 
-    def wix_cabinet_cache_path(path)
-      unless path.is_a?(String)
-        raise InvalidValue.new(:wix_cabinet_cache_path, 'be an String')
-      end
+    def wix_cabinet_cache_path(path = NULL)
+      if null?(val)
+        @wix_cabinet_cache || 'D:\\cabinet_cache'
+      else
+        unless path.is_a?(String)
+          raise InvalidValue.new(:wix_cabinet_cache_path, 'be an String')
+        end
 
-      @wix_cabinet_cache = path
+        @wix_cabinet_cache = path
+      end
     end
     expose :wix_cabinet_cache_path
     #
