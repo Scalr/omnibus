@@ -37,6 +37,7 @@ module Omnibus
       /linux-gate\.so/,
       /libselinux\.so\.1/,
       /libsepol\.so\.1/,
+      /libsqlite3\.so\.0/
     ].freeze
 
     ARCH_WHITELIST_LIBS = [
