@@ -289,6 +289,27 @@ module Omnibus
       raise MissingRequiredAttribute.new(self, :s3_secret_key, "'EFGH5678'")
     end
 
+    # The region of the S3 bucket you want to cache software artifacts in.
+    # Defaults to 'us-east-1'
+    #
+    # @return [String]
+    default(:s3_region) do
+      'us-east-1'
+    end
+
+    # --------------------------------------------------
+    # @!endgroup
+    #
+
+    #
+    # @!group Publisher
+    # --------------------------------------------------
+
+    # The number of times to try to publish an artifact
+    #
+    # @return [Integer]
+    default(:publish_retries, 2)
+
     # --------------------------------------------------
     # @!endgroup
     #
@@ -419,10 +440,36 @@ module Omnibus
       ['omnibus-software']
     end
 
-    # The solaris compiler to use
+    # Solaris linker mapfile to use, if needed
+    # see http://docs.oracle.com/cd/E23824_01/html/819-0690/chapter5-1.html
+    # Path is relative to the 'files' directory in your omnibus project
+    #
+    # For example:
+    #
+    #     /PATH/files/my_map_file 
     #
     # @return [String, nil]
-    default(:solaris_compiler, nil)
+    default(:solaris_linker_mapfile, "files/mapfiles/solaris")
+
+    # Architecture to target when building on windows.  This option
+    # should affect the bit-ness of Ruby and DevKit used, the platform of
+    # any MSIs generated and package dlls being downloaded.
+    #
+    # See the windows_arch_i386? software definition dsl
+    # methods.
+    #
+    # @return [:x86, :x64]
+    default(:windows_arch) do
+      if Ohai['kernel']['machine'] == 'x86_64'
+        Omnibus.logger.deprecated('Config') do
+          "windows_arch is defaulting to :x86. In Omnibus 5, it will " \
+          "default to :x64 if the machine architecture is x86_64. " \
+          "If you would like to continue building 32 bit packages, please "\
+          "manually set windows_arch in your omnibus.rb file to :x86."
+        end
+      end
+      :x86
+    end
 
     # --------------------------------------------------
     # @!endgroup
@@ -440,7 +487,7 @@ module Omnibus
     # The number of times to retry the build before failing.
     #
     # @return [Integer]
-    default(:build_retries, 3)
+    default(:build_retries, 0)
 
     # Use the incremental build caching implemented via git. This will
     # drastically improve build times, but may result in hidden and
@@ -448,6 +495,37 @@ module Omnibus
     #
     # @return [true, false]
     default(:use_git_caching, true)
+
+    # The number of worker threads for make. If this is not set
+    # explicitly in config, it will attempt to determine via Ohai in
+    # the builder, and failing that will default to 3
+    #
+    # @return [Integer]
+    default(:workers) do
+      if Ohai['cpu'] && Ohai['cpu']['total']
+        Ohai['cpu']['total'].to_i + 1
+      else
+        3
+      end
+    end
+
+    # --------------------------------------------------
+    # @!endgroup
+    #
+
+    #
+    # @!group Fetcher Parameters
+    # --------------------------------------------------
+
+    # The number of seconds to wait
+    #
+    # @return [Integer]
+    default(:fetcher_read_timeout, 60)
+
+    # The number of retries before marking a download as failed
+    #
+    # @return [Integer]
+    default(:fetcher_retries, 5)
 
     # --------------------------------------------------
     # @!endgroup

@@ -17,16 +17,11 @@
 
 require 'time'
 require 'json'
+require 'omnibus/manifest'
+require 'omnibus/manifest_entry'
+require 'omnibus/reports'
 
 module Omnibus
-  #
-  # Omnibus project DSL reader
-  #
-  # @todo It seems like there's a bit of a conflation between a "project" and a
-  #   "package" in this class... perhaps the package-building portions should be
-  #   extracted to a separate class.
-  #
-  #
   class Project
     class << self
       #
@@ -35,19 +30,19 @@ module Omnibus
       #
       # @return [Project]
       #
-      def load(name)
+      def load(name, manifest=nil)
         loaded_projects[name] ||= begin
           filepath = Omnibus.project_path(name)
 
           if filepath.nil?
             raise MissingProject.new(name)
           else
-            log.debug(log_key) do
+            log.internal(log_key) do
               "Loading project `#{name}' from `#{filepath}'."
             end
           end
 
-          instance = new(filepath)
+          instance = new(filepath, manifest)
           instance.evaluate_file(filepath)
           instance.load_dependencies
           instance
@@ -66,6 +61,8 @@ module Omnibus
       end
     end
 
+    attr_reader :manifest
+
     include Cleanroom
     include Digestable
     include Logging
@@ -73,8 +70,9 @@ module Omnibus
     include Sugarable
     include Util
 
-    def initialize(filepath = nil)
+    def initialize(filepath = nil, manifest=nil)
       @filepath = filepath
+      @manifest = manifest
     end
 
     #
@@ -129,6 +127,27 @@ module Omnibus
     expose :friendly_name
 
     #
+    # Set or retrieve the package name of the project. Defaults to the package
+    # name defaults to the project name.
+    #
+    # @example
+    #   package_name 'com.chef.project'
+    #
+    # @param [String] val
+    #   the package name to set
+    #
+    # @return [String]
+    #
+    def package_name(val = NULL)
+      if null?(val)
+        @package_name || name
+      else
+        @package_name = val
+      end
+    end
+    expose :package_name
+
+    #
     # **[Required]** Set or retrieve the path at which the project should be
     # installed by the generated package.
     #
@@ -177,6 +196,21 @@ module Omnibus
       end
     end
     expose :default_root
+
+    #
+    # Path to the +/files+ directory in the omnibus project. This directory can
+    # contain arbitrary files used by the project.
+    #
+    # @example
+    #   patch = File.join(files_path, 'rubygems', 'patch.rb')
+    #
+    # @return [String]
+    #   path to the files directory
+    #
+    def files_path
+      File.expand_path("#{Config.project_root}/files")
+    end
+    expose :files_path
 
     #
     # **[Required]** Set or retrieve the the package maintainer.
@@ -342,6 +376,24 @@ module Omnibus
     end
     expose :build_version
 
+
+    #
+    # Set or retrieve the git revision of the omnibus
+    # project being built.
+    #
+    # If not set by the user, and the current workding directory is a
+    # git directory, it will return the revision of the current
+    # working directory.
+    #
+    def build_git_revision(val = NULL)
+      if null?(val)
+        @build_git_revision ||= get_local_revision
+      else
+        @build_git_revision = val
+      end
+    end
+    expose :build_git_revision
+
     #
     # Set or retrieve the build iteration of the project. Defaults to +1+ if not
     # otherwise set.
@@ -453,9 +505,9 @@ module Omnibus
     #
     def override(name, val = NULL)
       if null?(val)
-        overrides[name]
+        overrides[name.to_sym]
       else
-        overrides[name] = val
+        overrides[name.to_sym] = val
       end
     end
     expose :override
@@ -640,6 +692,110 @@ module Omnibus
     expose :ohai
 
     #
+    # Set or retrieve the {#license} of the project.
+    #
+    # @example
+    #   license 'Apache 2.0'
+    #
+    # @param [String] val
+    #   the license to set for the project.
+    #
+    # @return [String]
+    #
+    def license(val = NULL)
+      if null?(val)
+        @license || 'Unspecified'
+      else
+        @license = val
+      end
+    end
+    expose :license
+
+    #
+    # Set or retrieve the location of the {#license_file}
+    # of the project.  It can either be a relative path inside
+    # the project source directory or a URL.
+    #
+    #
+    # @example
+    #   license_file 'LICENSES/artistic.txt'
+    #
+    # @param [String] val
+    #   the location of the license file for the project.
+    #
+    # @return [String]
+    #
+    def license_file(val = NULL)
+      if null?(val)
+        @license_file
+      else
+        @license_file = val
+      end
+    end
+    expose :license_file
+
+    #
+    # Location of license file that omnibus will create and that will contain
+    # the information about the license of the project plus the details about
+    # the licenses of the software components included in the project.
+    #
+    # If no path is specified  install_dir/LICENSE is used.
+    #
+    # @example
+    #   license_file_path
+    #
+    # @return [String]
+    #
+    def license_file_path(path = NULL)
+      if null?(path)
+        @license_file_path || File.join(install_dir, "LICENSE")
+      else
+        @license_file_path = File.join(install_dir, path)
+      end
+    end
+    expose :license_file_path
+
+    #
+    # Location of json-formated version manifest, written at at the
+    # end of the build. If no path is specified
+    # +install_dir+/version-manifest.json is used.
+    #
+    # @example
+    #   json_manifest_path
+    #
+    # @return [String]
+    #
+    def json_manifest_path(path = NULL)
+      if null?(path)
+        @json_manifest_path || File.join(install_dir, "version-manifest.json")
+      else
+        @json_manifest_path=path
+      end
+    end
+    expose :json_manifest_path
+
+    #
+    # Location of text-formatted manifest.
+    # (+install_dir+/version-manifest.txt if none is provided)
+    #
+    # This manifest uses the same format used by the
+    # 'version-manifest' software definition in omnibus-software.
+    #
+    # @example
+    #   text_manifest_path
+    #
+    # @return [String]
+    #
+    def text_manifest_path(path = NULL)
+      if null?(path)
+        @test_manifest_path || File.join(install_dir, "version-manifest.txt")
+      else
+        @text_manifest_path = path
+      end
+    end
+    expose :text_manifest_path
+
+    #
     # @!endgroup
     # --------------------------------------------------
 
@@ -657,7 +813,7 @@ module Omnibus
     #
     def load_dependencies
       dependencies.each do |dependency|
-        Software.load(self, dependency)
+        Software.load(self, dependency, manifest)
       end
 
       true
@@ -838,10 +994,23 @@ module Omnibus
     # install path cache, or software definitions to invalidate the cache for
     # this project.
     #
+    # @param [Software] software
+    #   the software that dirtied the cache
+    #
     # @return [true, false]
     #
-    def dirty!
-      @dirty = true
+    def dirty!(software)
+      raise ProjectAlreadyDirty.new(self) if culprit
+      @culprit = software
+    end
+
+    #
+    # The software definition which dirtied this project.
+    #
+    # @return [Software, nil]
+    #
+    def culprit
+      @culprit
     end
 
     #
@@ -850,7 +1019,7 @@ module Omnibus
     # @return [true, false]
     #
     def dirty?
-      !!@dirty
+      !!culprit
     end
 
     #
@@ -863,33 +1032,79 @@ module Omnibus
     end
 
     #
+    # Cache the build order so we don't re-compute
     #
+    # @return [Array<Omnibus::Software>]
     #
-    def build_me
+    def softwares
+      @softwares ||= library.build_order
+    end
+
+    #
+    # Generate a version manifest of the loaded software sources.
+    #
+    # @returns [Omnibus::Manifest]
+    #
+    def built_manifest
+      log.info(log_key) { "Building version manifest" }
+      m = Omnibus::Manifest.new(build_version, build_git_revision, license)
+      softwares.each do |software|
+        m.add(software.name, software.manifest_entry)
+      end
+      m
+    end
+
+    def download
+      ThreadPool.new(Config.workers) do |pool|
+        softwares.each do |software|
+          pool.schedule { software.fetch }
+        end
+      end
+    end
+
+    def build
       FileUtils.rm_rf(install_dir)
       FileUtils.mkdir_p(install_dir)
 
-      # Cache the build order so we don't re-compute
-      softwares = library.build_order
-
-      # Download all softwares first
-      softwares.each do |software|
-        software.fetch
-      end
-
-      # Now build each software
       softwares.each do |software|
         software.build_me
       end
 
-      # Health check
+      write_json_manifest
+      write_text_manifest
+      Licensing.create!(self)
       HealthCheck.run!(self)
-
-      # Package
       package_me
-
-      # Compress
       compress_me
+    end
+
+    def write_json_manifest
+      File.open(json_manifest_path, 'w') do |f|
+        f.write(JSON.pretty_generate(built_manifest.to_hash))
+      end
+    end
+
+    #
+    # Writes a text manifest to the text_manifest_path.  This uses the
+    # same method as the "version-manifest" software definition in
+    # omnibus-software.
+    #
+    def write_text_manifest
+      File.open(text_manifest_path, 'w') do |f|
+        f.puts "#{name} #{build_version}"
+        f.puts ""
+        f.puts Omnibus::Reports.pretty_version_map(self)
+      end
+    end
+
+    #
+    # Download and build the project. Preserved for backwards
+    # compatibility.
+    #
+    def build_me
+      # Download all softwares in parallel
+      download
+      build
     end
 
     #
@@ -913,8 +1128,8 @@ module Omnibus
 
       # Copy the generated package and metadata back into the workspace
       package_path = File.join(Config.package_dir, packager.package_name)
-      FileUtils.cp(package_path, destination)
-      FileUtils.cp("#{package_path}.metadata.json", destination)
+      FileUtils.cp(package_path, destination, preserve: true)
+      FileUtils.cp("#{package_path}.metadata.json", destination, preserve: true)
     end
 
     #
@@ -982,28 +1197,17 @@ module Omnibus
       @shasum ||= begin
         digest = Digest::SHA256.new
 
-        log.info(log_key)  { "Calculating shasum" }
-        log.debug(log_key) { "name: #{name.inspect}" }
-        log.debug(log_key) { "install_dir: #{install_dir.inspect}" }
-        log.debug(log_key) { "overrides: #{overrides.inspect}" }
-
         update_with_string(digest, name)
         update_with_string(digest, install_dir)
         update_with_string(digest, JSON.fast_generate(overrides))
 
         if filepath && File.exist?(filepath)
-          log.debug(log_key) { "filepath: #{filepath.inspect}" }
           update_with_file_contents(digest, filepath)
         else
-          log.debug(log_key) { "filepath: <DYNAMIC>" }
           update_with_string(digest, '<DYNAMIC>')
         end
 
-        shasum = digest.hexdigest
-
-        log.debug(log_key) { "shasum: #{shasum.inspect}" }
-
-        shasum
+        digest.hexdigest
       end
     end
 
@@ -1012,6 +1216,12 @@ module Omnibus
     # --------------------------------------------------
 
     private
+
+    def get_local_revision
+      GitRepository.new("./").revision
+    rescue StandardError
+      "unknown"
+    end
 
     #
     # The log key for this project, overriden to include the name of the

@@ -15,5 +15,5 @@
 #
 
 module Omnibus
-  VERSION = '4.0.0.alpha'
+  VERSION = '5.2.0'
 end

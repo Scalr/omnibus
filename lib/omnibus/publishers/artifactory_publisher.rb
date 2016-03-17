@@ -15,6 +15,7 @@
 #
 
 require 'uri'
+require 'benchmark'
 
 module Omnibus
   class ArtifactoryPublisher < Publisher
@@ -29,14 +30,39 @@ module Omnibus
 
         # Upload the actual package
         log.info(log_key) { "Uploading '#{package.name}'" }
-        artifact_for(package).upload(
-          repository,
-          remote_path_for(package),
-          metadata_for(package),
-        )
+
+        retries = Config.publish_retries
+
+        begin
+          upload_time = Benchmark.realtime do
+            artifact_for(package).upload(
+              repository,
+              remote_path_for(package),
+              default_properties.merge(metadata_properties_for(package)),
+            )
+          end
+        rescue Artifactory::Error::HTTPError => e
+          if (retries -= 1) != 0
+            log.info(log_key) { "Upload failed with exception: #{e}"}
+            log.info(log_key) { "Retrying failed publish #{retries} more time(s)..." }
+            retry
+          else
+            raise e
+          end
+        end
+
+        log.debug(log_key)  { "Elapsed time to publish #{package.name}:  #{1000*upload_time} ms" }
 
         # If a block was given, "yield" the package to the caller
         block.call(package) if block
+      end
+
+      if build_record?
+        if packages.empty?
+          log.warn(log_key) { "No packages were uploaded, build record will not be created." }
+        else
+          build_for(packages).save
+        end
       end
     end
 
@@ -59,6 +85,77 @@ module Omnibus
           'sha1' => package.metadata[:sha1],
         }
       )
+    end
+
+    #
+    # The build object that corresponds to this package.
+    #
+    # @param [Array<Package>] packages
+    #   the packages to create the build from
+    #
+    # @return [Artifactory::Resource::Build]
+    #
+    def build_for(packages)
+      name = packages.first.metadata[:name]
+      # Attempt to load the version-manifest.json file which represents
+      # the build.
+      manifest = if File.exist?(version_manifest)
+                   Manifest.from_file(version_manifest)
+                 else
+                   Manifest.new(packages.first.metadata[:version])
+                 end
+
+      # Upload the actual package
+      log.info(log_key) { "Saving build info for #{name}, Build ##{manifest.build_version}" }
+
+      Artifactory::Resource::Build.new(
+        client: client,
+        name:   name,
+        number: manifest.build_version,
+        vcs_revision: manifest.build_git_revision,
+        build_agent: {
+          name: 'omnibus',
+          version: Omnibus::VERSION,
+        },
+        properties: default_properties.merge(
+          'omnibus.project' => name,
+          'omnibus.version' => manifest.build_version,
+          'omnibus.version_manifest' => manifest.to_json,
+        ),
+        modules: [
+          {
+            # com.getchef:chef-server:12.0.0
+            id: [
+              Config.artifactory_base_path.gsub('/', '.'),
+              name,
+              manifest.build_version,
+            ].join(':'),
+            artifacts: packages.map do |package|
+              {
+                type: File.extname(package.path).split('.').last,
+                sha1: package.metadata[:sha1],
+                md5:  package.metadata[:md5],
+                name: package.metadata[:basename],
+              }
+            end
+          }
+        ]
+      )
+    end
+
+    #
+    # Indicates if an Artifactory build record should be created for the
+    # published set of packages.
+    #
+    # @return [Boolean]
+    #
+    def build_record?
+      # We want to create a build record by default
+      if @options[:build_record].nil?
+        true
+      else
+        @options[:build_record]
+      end
     end
 
     #
@@ -88,11 +185,11 @@ module Omnibus
     #
     # @return [Hash<String, String>]
     #
-    def metadata_for(package)
-      {
+    def metadata_properties_for(package)
+      metadata = {
         'omnibus.project'          => package.metadata[:name],
-        'omnibus.platform'         => publish_platform(package),
-        'omnibus.platform_version' => publish_platform_version(package),
+        'omnibus.platform'         => package.metadata[:platform],
+        'omnibus.platform_version' => package.metadata[:platform_version],
         'omnibus.architecture'     => package.metadata[:arch],
         'omnibus.version'          => package.metadata[:version],
         'omnibus.iteration'        => package.metadata[:iteration],
@@ -101,6 +198,20 @@ module Omnibus
         'omnibus.sha256'           => package.metadata[:sha256],
         'omnibus.sha512'           => package.metadata[:sha512],
       }
+      metadata.merge!(
+        'build.name'   => package.metadata[:name],
+        'build.number' => package.metadata[:version],
+      ) if build_record?
+      metadata
+    end
+
+    #
+    # Properties to attach to published artifacts (and build record).
+    #
+    # @return [Hash<String, String>]
+    #
+    def default_properties
+      @properties ||= @options[:properties] || {}
     end
 
     #
@@ -110,6 +221,15 @@ module Omnibus
     #
     def repository
       @options[:repository]
+    end
+
+    #
+    # The path to the builds version-manfest.json file (as supplied as an option).
+    #
+    # @return [String]
+    #
+    def version_manifest
+      @options[:version_manifest] || ''
     end
 
     #
@@ -130,8 +250,8 @@ module Omnibus
         Config.artifactory_base_path,
         package.metadata[:name],
         package.metadata[:version],
-        publish_platform(package),
-        publish_platform_version(package),
+        package.metadata[:platform],
+        package.metadata[:platform_version],
         package.metadata[:basename],
       )
     end

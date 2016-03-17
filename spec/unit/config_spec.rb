@@ -9,6 +9,7 @@ module Omnibus
     end
 
     before do
+      Config.reset!
       # Don't expand paths on the build system. Otherwise, you will end up with
       # paths like +\\Users\\you\\Development\\omnibus-ruby\\C:/omnibus-ruby+
       # when testing on "other" operating systems
@@ -37,10 +38,38 @@ module Omnibus
     include_examples 'a configurable', :project_root, Dir.pwd
     include_examples 'a configurable', :local_software_dirs, []
     include_examples 'a configurable', :software_gems, ['omnibus-software']
-    include_examples 'a configurable', :solaris_compiler, nil
+    include_examples 'a configurable', :solaris_linker_mapfile, 'files/mapfiles/solaris'
     include_examples 'a configurable', :append_timestamp, true
-    include_examples 'a configurable', :build_retries, 3
+    include_examples 'a configurable', :build_retries, 0
     include_examples 'a configurable', :use_git_caching, true
+    include_examples 'a configurable', :fetcher_read_timeout, 60
+    include_examples 'a configurable', :fetcher_retries, 5
+
+    describe '#workers' do
+      context 'when the Ohai data is not present' do
+        before do
+          stub_ohai(platform: 'ubuntu', version: '12.04') do |data|
+            data['cpu'] = nil
+          end
+        end
+
+        it 'defaults to 3' do
+          expect(described_class.workers).to eq(3)
+        end
+      end
+
+      context 'when the Ohai data is present' do
+        before do
+          stub_ohai(platform: 'ubuntu', version: '12.04') do |data|
+            data['cpu'] = { 'total' => '5' }
+          end
+        end
+
+        it 'defaults to the value + 6' do
+          expect(described_class.workers).to eq(6)
+        end
+      end
+    end
 
     context 'on Windows' do
       before { stub_ohai(platform: 'windows', version: '2012') }

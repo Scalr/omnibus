@@ -22,11 +22,54 @@ module Omnibus
     subject { described_class.new(package, data) }
 
     describe '.arch' do
-      it 'returns the architecture' do
+      let(:architecture) { 'x86_64' }
+
+      before do
         stub_ohai(platform: 'ubuntu', version: '12.04') do |data|
-          data['kernel']['machine'] = 'x86_64'
+          data['kernel']['machine'] = architecture
         end
+      end
+
+      it 'returns the architecture' do
         expect(described_class.arch).to eq('x86_64')
+      end
+
+      context 'on solaris' do
+        before do
+          stub_ohai(platform: 'solaris2', version: '5.11') do |data|
+            data['platform'] = 'solaris2'
+            data['kernel']['machine'] = architecture
+          end
+        end
+
+        context 'architecture is Intel-based' do
+          let(:architecture) { 'i86pc' }
+
+          it 'returns i386' do
+            expect(described_class.arch).to eq('i386')
+          end
+        end
+
+        context 'architecture is SPARC-based' do
+          let(:architecture) { 'sun4v' }
+
+          it 'returns sparc' do
+            expect(described_class.arch).to eq('sparc')
+          end
+        end
+      end
+
+      context 'on windows' do
+        before do
+          stub_ohai(platform: 'windows', version: '2012R2') do |data|
+            data['kernel']['machine'] = architecture
+          end
+        end
+
+        it 'returns a 32-bit value based on Config.windows_arch being set to x86' do
+          expect(Config).to receive(:windows_arch).and_return(:x86)
+          expect(described_class.arch).to eq('i386')
+        end
       end
     end
 
@@ -36,7 +79,12 @@ module Omnibus
         expect(described_class.platform_shortname).to eq('el')
       end
 
-      it 'returns .platform on non-rhel systems' do
+      it 'returns sles on suse' do
+        stub_ohai(platform: 'suse', version: '12.0')
+        expect(described_class.platform_shortname).to eq('sles')
+      end
+
+      it 'returns .platform on all other systems' do
         stub_ohai(platform: 'ubuntu', version: '12.04')
         expect(described_class.platform_shortname).to eq('ubuntu')
       end
@@ -56,26 +104,31 @@ module Omnibus
         end
       end
 
-      it_behaves_like 'a version manipulator', 'arch', '2009.02', '2009.02'
-      it_behaves_like 'a version manipulator', 'arch', '2014.06.01', '2014.06'
+      it_behaves_like 'a version manipulator', 'aix', '7.1', '7.1'
+      it_behaves_like 'a version manipulator', 'arch', 'rolling', 'rolling'
+      it_behaves_like 'a version manipulator', 'centos', '5.9.6', '5'
       it_behaves_like 'a version manipulator', 'debian', '7.1', '7'
       it_behaves_like 'a version manipulator', 'debian', '6.9', '6'
-      it_behaves_like 'a version manipulator', 'ubuntu', '10.04', '10.04'
-      it_behaves_like 'a version manipulator', 'ubuntu', '10.04.04', '10.04'
+      it_behaves_like 'a version manipulator', 'el', '6.5', '6'
       it_behaves_like 'a version manipulator', 'fedora', '11.5', '11'
       it_behaves_like 'a version manipulator', 'freebsd', '10.0', '10'
-      it_behaves_like 'a version manipulator', 'rhel', '6.5', '6'
-      it_behaves_like 'a version manipulator', 'el', '6.5', '6'
-      it_behaves_like 'a version manipulator', 'centos', '5.9.6', '5'
-      it_behaves_like 'a version manipulator', 'aix', '7.1', '7.1'
       it_behaves_like 'a version manipulator', 'gentoo', '2004.3', '2004.3'
+      it_behaves_like 'a version manipulator', 'ios_xr', '6.0.0.14I', '6'
       it_behaves_like 'a version manipulator', 'mac_os_x', '10.9.1', '10.9'
-      it_behaves_like 'a version manipulator', 'openbsd', '5.4.4', '5.4'
-      it_behaves_like 'a version manipulator', 'slackware', '12.0.1', '12.0'
-      it_behaves_like 'a version manipulator', 'solaris2', '5.9', '5.9'
-      it_behaves_like 'a version manipulator', 'suse', '5.9', '5.9'
+      it_behaves_like 'a version manipulator', 'nexus', '5.0', '5'
       it_behaves_like 'a version manipulator', 'omnios', 'r151010', 'r151010'
+      it_behaves_like 'a version manipulator', 'openbsd', '5.4.4', '5.4'
+      it_behaves_like 'a version manipulator', 'opensuse', '5.9', '5.9'
+      it_behaves_like 'a version manipulator', 'pidora', '11.5', '11'
+      it_behaves_like 'a version manipulator', 'raspbian', '7.1', '7'
+      it_behaves_like 'a version manipulator', 'rhel', '6.5', '6'
+      it_behaves_like 'a version manipulator', 'slackware', '12.0.1', '12.0'
+      it_behaves_like 'a version manipulator', 'sles', '11.2', '11'
+      it_behaves_like 'a version manipulator', 'suse', '12.0', '12'
       it_behaves_like 'a version manipulator', 'smartos', '20120809T221258Z', '20120809T221258Z'
+      it_behaves_like 'a version manipulator', 'solaris2', '5.9', '5.9'
+      it_behaves_like 'a version manipulator', 'ubuntu', '10.04', '10.04'
+      it_behaves_like 'a version manipulator', 'ubuntu', '10.04.04', '10.04'
       it_behaves_like 'a version manipulator', 'windows', '5.0.2195', '2000'
       it_behaves_like 'a version manipulator', 'windows', '5.1.2600', 'xp'
       it_behaves_like 'a version manipulator', 'windows', '5.2.3790', '2003r2'
@@ -85,6 +138,7 @@ module Omnibus
       it_behaves_like 'a version manipulator', 'windows', '6.2.9200', '8'
       it_behaves_like 'a version manipulator', 'windows', '6.3.9200', '8.1'
       it_behaves_like 'a version manipulator', 'windows', '6.3.9600', '8.1'
+      it_behaves_like 'a version manipulator', 'windows', '10.0.10240', '10'
 
       context 'given an unknown platform' do
         before do

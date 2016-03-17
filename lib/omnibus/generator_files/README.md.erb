@@ -5,7 +5,7 @@ This project creates full-stack platform-specific packages for
 
 Installation
 ------------
-You must have a sane Ruby 1.9+ environment with Bundler installed. Ensure all
+You must have a sane Ruby 2.0.0+ environment with Bundler installed. Ensure all
 the required gems are installed:
 
 ```shell
@@ -62,6 +62,23 @@ Full help for the Omnibus command line interface can be accessed with the
 ```shell
 $ bin/omnibus help
 ```
+
+Version Manifest
+----------------
+
+Git-based software definitions may specify branches as their
+default_version. In this case, the exact git revision to use will be
+determined at build-time unless a project override (see below) or
+external version manifest is used.  To generate a version manifest use
+the `omnibus manifest` command:
+
+```
+omnibus manifest PROJECT -l warn
+```
+
+This will output a JSON-formatted manifest containing the resolved
+version of every software definition.
+
 
 Kitchen-based Build Environment
 -------------------------------

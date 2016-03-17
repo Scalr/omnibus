@@ -15,9 +15,9 @@ module Omnibus
 
     subject { described_class.new(project) }
 
-    let(:project_root) { "#{tmp_path}/project/root" }
-    let(:package_dir)  { "#{tmp_path}/package/dir" }
-    let(:staging_dir)  { "#{tmp_path}/staging/dir" }
+    let(:project_root) { File.join(tmp_path, 'project/root') }
+    let(:package_dir)  { File.join(tmp_path, 'package/dir') }
+    let(:staging_dir)  { File.join(tmp_path, 'staging/dir') }
 
     before do
       Config.project_root(project_root)
@@ -167,13 +167,18 @@ module Omnibus
         create_file("#{project_root}/package-scripts/project/postrm") { "postrm" }
       end
 
-      it 'copies the scripts into the DEBIAN dir' do
+      it 'copies the scripts into the DEBIAN dir with permissions = 100755', :not_supported_on_windows do
         subject.write_scripts
 
         expect("#{staging_dir}/DEBIAN/preinst").to be_a_file
         expect("#{staging_dir}/DEBIAN/postinst").to be_a_file
         expect("#{staging_dir}/DEBIAN/prerm").to be_a_file
         expect("#{staging_dir}/DEBIAN/postrm").to be_a_file
+
+        expect("#{staging_dir}/DEBIAN/preinst").to have_permissions '100755'
+        expect("#{staging_dir}/DEBIAN/postinst").to have_permissions '100755'
+        expect("#{staging_dir}/DEBIAN/prerm").to have_permissions '100755'
+        expect("#{staging_dir}/DEBIAN/postrm").to have_permissions '100755'
       end
 
       it 'logs a message' do
@@ -193,6 +198,8 @@ module Omnibus
         create_file("#{staging_dir}/.filea") { ".filea" }
         create_file("#{staging_dir}/file1") { "file1" }
         create_file("#{staging_dir}/file2") { "file2" }
+        create_file("#{staging_dir}/DEBIAN/preinst") { "preinst" }
+        create_file("#{staging_dir}/DEBIAN/postrm") { "postrm" }
       end
 
       it 'generates the file' do
@@ -204,9 +211,12 @@ module Omnibus
         subject.write_md5_sums
         contents = File.read("#{staging_dir}/DEBIAN/md5sums")
 
-         expect(contents).to include("9334770d184092f998009806af702c8c .filea")
-         expect(contents).to include("826e8142e6baabe8af779f5f490cf5f5 file1")
-         expect(contents).to include("1c1c96fd2cf8330db0bfa936ce82f3b9 file2")
+        expect(contents).to include("9334770d184092f998009806af702c8c  .filea")
+        expect(contents).to include("826e8142e6baabe8af779f5f490cf5f5  file1")
+        expect(contents).to include("1c1c96fd2cf8330db0bfa936ce82f3b9  file2")
+        expect(contents).to_not include("1c1c96fd2cf8330db0bfa936ce82f3b9 file2")
+        expect(contents).to_not include("DEBIAN/preinst")
+        expect(contents).to_not include("DEBIAN/postrm")
       end
     end
 
@@ -238,8 +248,8 @@ module Omnibus
       before do
         project.install_dir(staging_dir)
 
-        create_file("#{staging_dir}/file1") { "1"*10_000 }
-        create_file("#{staging_dir}/file2") { "2"*20_000 }
+        create_file("#{staging_dir}/file1") { "1" * 10_000 }
+        create_file("#{staging_dir}/file2") { "2" * 20_000 }
       end
 
       it 'stats all the files in the install_dir' do
@@ -247,10 +257,10 @@ module Omnibus
       end
     end
 
-    describe '#safe_project_name' do
+    describe '#safe_base_package_name' do
       context 'when the project name is "safe"' do
         it 'returns the value without logging a message' do
-          expect(subject.safe_project_name).to eq('project')
+          expect(subject.safe_base_package_name).to eq('project')
           expect(subject).to_not receive(:log)
         end
       end
@@ -260,16 +270,16 @@ module Omnibus
 
         it 'returns the value while logging a message' do
           output = capture_logging do
-            expect(subject.safe_project_name).to eq('Pro-ject123.for-realz-2')
+            expect(subject.safe_base_package_name).to eq('pro-ject123.for-realz-2')
           end
 
-          expect(output).to include("The `name' compontent of Debian package names can only include")
+          expect(output).to include("The `name' component of Debian package names can only include")
         end
       end
     end
 
     describe '#safe_build_iteration' do
-      it 'returns the build iternation' do
+      it 'returns the build iteration' do
         expect(subject.safe_build_iteration).to eq(project.build_iteration)
       end
     end
@@ -282,15 +292,27 @@ module Omnibus
         end
       end
 
-      context 'when the project build_version has invalid characters' do
-        before { project.build_version("1.2$alpha.##__2") }
+      context 'when the project build_version has dashes' do
+        before { project.build_version('1.2-rc.1') }
 
         it 'returns the value while logging a message' do
           output = capture_logging do
-            expect(subject.safe_version).to eq('1.2-alpha.-2')
+            expect(subject.safe_version).to eq('1.2~rc.1')
           end
 
-          expect(output).to include("The `version' compontent of Debian package names can only include")
+          expect(output).to include("Dashes hold special significance in the Debian package versions.")
+        end
+      end
+
+      context 'when the project build_version has invalid characters' do
+        before { project.build_version("1.2$alpha.~##__2") }
+
+        it 'returns the value while logging a message' do
+          output = capture_logging do
+            expect(subject.safe_version).to eq('1.2_alpha.~_2')
+          end
+
+          expect(output).to include("The `version' component of Debian package names can only include")
         end
       end
     end
@@ -317,6 +339,72 @@ module Omnibus
 
         it 'returns the value' do
           expect(subject.safe_architecture).to eq('i386')
+        end
+      end
+
+      context 'when i686' do
+        before do
+          stub_ohai(platform: 'ubuntu', version: '12.04') do |data|
+            data['kernel']['machine'] = 'i686'
+          end
+        end
+
+        it 'returns i386' do
+          expect(subject.safe_architecture).to eq('i386')
+        end
+      end
+
+      context 'when ppc64le' do
+        before do
+          stub_ohai(platform: 'ubuntu', version: '14.04') do |data|
+            data['kernel']['machine'] = 'ppc64le'
+          end
+        end
+
+        it 'returns ppc64el' do
+          expect(subject.safe_architecture).to eq('ppc64el')
+        end
+      end
+
+      context 'Raspberry Pi' do
+        context 'Raspbian on Pi v1' do
+          before do
+            # There's no Raspbian in Fauxhai :(
+            stub_ohai(platform: 'debian', version: '7.6') do |data|
+              data['platform'] = 'raspbian'
+              data['platform_version'] = '7.6'
+              data['kernel']['machine'] = 'armv6l'
+            end
+          end
+
+          it 'returns armhf' do
+            expect(subject.safe_architecture).to eq('armhf')
+          end
+        end
+
+        context 'Ubuntu on Pi v2' do
+          before do
+            # There's no Raspbian in Fauxhai :(
+            stub_ohai(platform: 'ubuntu', version: '14.04') do |data|
+              data['kernel']['machine'] = 'armv7l'
+            end
+          end
+
+          it 'returns armhf' do
+            expect(subject.safe_architecture).to eq('armhf')
+          end
+        end
+      end
+
+      context '64bit ARM platform' do
+        before do
+          stub_ohai(platform: 'ubuntu', version: '14.04') do |data|
+            data['kernel']['machine'] = 'aarch64'
+          end
+        end
+
+        it 'returns arm64' do
+          expect(subject.safe_architecture).to eq('arm64')
         end
       end
     end

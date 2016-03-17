@@ -87,7 +87,7 @@ EOH
 
     def to_s
       <<-EOH
-Attempting to evaluate the template `#{@name}', but it was not found at any of
+Attempting to evaluate the template `#{@template}', but it was not found at any of
 the following locations:
 
 #{@search_paths.map { |path| "    #{path}" }.join("\n")}
@@ -157,7 +157,7 @@ EOH
     #
     # @param [Symbol] source
     #   the source method that received an invalid value
-    # @Param [String] message
+    # @param [String] message
     #   the message about why the value is invalid
     #
     def initialize(source, message)
@@ -214,6 +214,18 @@ EOH
     end
   end
 
+  class ChecksumMissing < Error
+    def initialize(software)
+      super <<-EOH
+Verification for #{software.name} failed due to a missing checksum.
+
+This added security check is used to prevent MITM attacks when downloading the
+remote file. You must specify a checksum for each version of software downloaded
+from a remote location.
+EOH
+    end
+  end
+
   class ChecksumMismatch < Error
     def initialize(software, expected, actual)
       super <<-EOH
@@ -227,6 +239,100 @@ remote file. If you have updated the version or URL for the download, you will
 also need to update the checksum value. You can find the checksum value on the
 software publisher's website.
 EOH
+    end
+  end
+
+  class CommandFailed < Error
+    def initialize(cmd)
+      status = cmd.exitstatus
+
+      if cmd.environment.nil? || cmd.environment.empty?
+        env = nil
+      else
+        env = cmd.environment.sort.map { |k,v| "#{k}=#{v}" }.join(' ')
+      end
+
+      command = cmd.command
+      command_with_env = [env, command].compact.join(' ')
+
+      stdout = cmd.stdout.empty? ? '(nothing)' : cmd.stdout.strip
+      stderr = cmd.stderr.empty? ? '(nothing)' : cmd.stderr.strip
+
+      super <<-EOH
+The following shell command exited with status #{status}:
+
+    $ #{command_with_env}
+
+Output:
+
+    #{stdout}
+
+Error:
+
+    #{stderr}
+EOH
+    end
+  end
+
+  class CommandTimeout < Error
+    def initialize(cmd)
+      status = cmd.exitstatus
+
+      if cmd.environment.nil? || cmd.environment.empty?
+        env = nil
+      else
+        env = cmd.environment.sort.map { |k,v| "#{k}=#{v}" }.join(' ')
+      end
+
+      command = cmd.command
+      command_with_env = [env, command].compact.join(' ')
+
+      timeout = cmd.timeout.to_s.reverse.gsub(/...(?=.)/,'\&,').reverse
+
+      super <<-EOH
+The following shell command timed out at #{timeout} seconds:
+
+    $ #{command_with_env}
+
+Please increase the `:timeout' value or run the command manually to make sure it
+is completing successfully. Sometimes it is common for a command to wait for
+user input.
+EOH
+    end
+  end
+
+  class ProjectAlreadyDirty < Error
+    def initialize(project)
+      name = project.name
+      culprit = project.culprit.name
+
+      super <<-EOH
+The project `#{name}' was already marked as dirty by `#{culprit}'. You cannot
+mark a project as dirty twice. This is probably a bug in Omnibus and should be
+reported.
+EOH
+    end
+  end
+
+  class UnresolvableGitReference < Error
+    def initialize(ref)
+      super <<-EOH
+Could not resolve `#{ref}' to a valid git SHA-1.
+EOH
+    end
+  end
+
+  class InvalidVersion < Error
+    def initialize(version)
+      super <<-EOF
+'#{version}' could not be parsed as a valid version.
+EOF
+    end
+  end
+
+  class FailedToTimestampMSI < Error
+    def initialize
+      super("Failed to add timestamp to MSI.")
     end
   end
 end

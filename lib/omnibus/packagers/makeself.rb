@@ -16,6 +16,12 @@
 
 module Omnibus
   class Packager::Makeself < Packager::Base
+    # @return [Hash]
+    SCRIPT_MAP = {
+      # Default Omnibus naming
+      postinst: 'postinst',
+    }.freeze
+
     id :makeself
 
     setup do
@@ -27,8 +33,11 @@ module Omnibus
     end
 
     build do
-      # Render the post_extract file
-      write_post_extract_file
+      # Write the scripts
+      write_scripts
+
+      # Write the makeselfinst file
+      write_makeselfinst
 
       # Create the makeself archive
       create_makeself_package
@@ -36,7 +45,7 @@ module Omnibus
 
     # @see Base#package_name
     def package_name
-      "#{project.name}-#{project.build_version}_#{project.build_iteration}.#{safe_architecture}.run"
+      "#{project.package_name}-#{project.build_version}_#{project.build_iteration}.#{safe_architecture}.sh"
     end
 
     #
@@ -60,21 +69,39 @@ module Omnibus
     end
 
     #
-    # Write the post-extraction file that will be executed upon extraction of
-    # the makeself file.
+    # Render a makeselfinst in the staging directory using the supplied ERB
+    # template. This file will be used to move the contents of the self-
+    # extracting archive into place following extraction.
     #
     # @return [void]
     #
-    def write_post_extract_file
-      render_template(resource_path('post_extract.sh.erb'),
-        destination: File.join(staging_dir, 'post_extract.sh'),
-        mode: 0755,
+    def write_makeselfinst
+      makeselfinst_staging_path = File.join(staging_dir, 'makeselfinst')
+      render_template(resource_path('makeselfinst.erb'),
+        destination: makeselfinst_staging_path,
         variables: {
-          name:          project.name,
-          friendly_name: project.friendly_name,
-          install_dir:   project.install_dir,
+          install_dir: project.install_dir,
         }
       )
+      FileUtils.chmod(0755, makeselfinst_staging_path)
+    end
+
+    #
+    # Copy all scripts in {Project#package_scripts_path} to the staging
+    # directory.
+    #
+    # @return [void]
+    #
+    def write_scripts
+      SCRIPT_MAP.each do |source, destination|
+        source_path = File.join(project.package_scripts_path, source.to_s)
+
+        if File.file?(source_path)
+          destination_path = File.join(staging_dir, destination)
+          log.debug(log_key) { "Adding script `#{source}' to `#{destination_path}'" }
+          copy_file(source_path, destination_path)
+        end
+      end
     end
 
     #
@@ -93,11 +120,11 @@ module Omnibus
             "#{staging_dir}" \\
             "#{package_name}" \\
             "#{project.description}" \\
-            "./post_extract.sh"
+            "./makeselfinst"
         EOH
       end
 
-      FileSyncer.glob("#{staging_dir}/*.run").each do |makeself|
+      FileSyncer.glob("#{staging_dir}/*.sh").each do |makeself|
         copy_file(makeself, Config.package_dir)
       end
     end
