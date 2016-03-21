@@ -400,7 +400,7 @@ module Omnibus
       case Ohai['kernel']['machine']
       when 'x86_64'
         'amd64'
-      when 'i686'
+      when 'i386', 'i486', 'i686'
         'i386'
       when /armv\dl/
         if Ohai['platform'] == 'raspbian' || Ohai['platform'] == 'ubuntu'
