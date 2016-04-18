@@ -15,9 +15,9 @@ module Omnibus
 
     subject { described_class.new(project) }
 
-    let(:project_root) { "#{tmp_path}/project/root" }
-    let(:package_dir)  { "#{tmp_path}/package/dir" }
-    let(:staging_dir)  { "#{tmp_path}/staging/dir" }
+    let(:project_root) { File.join(tmp_path, 'project/root') }
+    let(:package_dir)  { File.join(tmp_path, 'package/dir') }
+    let(:staging_dir)  { File.join(tmp_path, 'staging/dir') }
 
     before do
       allow(project).to receive(:packager)
@@ -266,8 +266,16 @@ module Omnibus
     end
 
     describe '#package_name' do
-      it 'includes the name, version, and build iteration' do
+      it 'reflects the packager\'s unmodified package_name' do
         expect(subject.package_name).to eq('project-1.2.3-2.dmg')
+      end
+
+      it 'reflects the packager\'s modified package_name' do
+        package_basename = 'projectsub-1.2.3-3'
+        allow(project.packager).to receive(:package_name)
+          .and_return("#{package_basename}.pkg")
+
+        expect(subject.package_name).to eq("#{package_basename}.dmg")
       end
     end
 

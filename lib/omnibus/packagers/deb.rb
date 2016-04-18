@@ -175,7 +175,7 @@ module Omnibus
     # extension.
     #
     def package_name
-      "#{safe_project_name}_#{safe_version}-#{safe_build_iteration}_#{safe_architecture}.deb"
+      "#{safe_base_package_name}_#{safe_version}-#{safe_build_iteration}_#{safe_architecture}.deb"
     end
 
     #
@@ -200,7 +200,7 @@ module Omnibus
       render_template(resource_path('control.erb'),
         destination: File.join(debian_dir, 'control'),
         variables: {
-          name:           safe_project_name,
+          name:           safe_base_package_name,
           version:        safe_version,
           iteration:      safe_build_iteration,
           vendor:         vendor,
@@ -246,8 +246,10 @@ module Omnibus
         path = File.join(project.package_scripts_path, script)
 
         if File.file?(path)
-          log.debug(log_key) { "Adding script `#{script}' to `#{debian_dir}'" }
+          log.debug(log_key) { "Adding script `#{script}' to `#{debian_dir}' from #{path}" }
           copy_file(path, debian_dir)
+          log.debug(log_key)  { "SCRIPT FILE:  #{debian_dir}/#{script}" }
+          FileUtils.chmod(0755, File.join(debian_dir, script))
         end
       end
     end
@@ -261,7 +263,7 @@ module Omnibus
     def write_md5_sums
       path = "#{staging_dir}/**/*"
       hash = FileSyncer.glob(path).inject({}) do |hash, path|
-        if File.file?(path) && !File.symlink?(path)
+        if File.file?(path) && !File.symlink?(path) && !(File.dirname(path) == debian_dir)
           relative_path = path.gsub("#{staging_dir}/", '')
           hash[relative_path] = digest(path, :md5)
         end
@@ -278,7 +280,9 @@ module Omnibus
     end
 
     #
-    # Create the +.deb+ file, compressing at gzip level 9.
+    # Create the +.deb+ file, compressing at gzip level 9. The use of the
+    # +fakeroot+ command is required so that the package is owned by
+    # +root:root+, but the build user does not need to have sudo permissions.
     #
     # @return [void]
     #
@@ -315,21 +319,21 @@ module Omnibus
     end
 
     #
-    # Return the Debian-ready project name, converting any invalid characters to
+    # Return the Debian-ready base package name, converting any invalid characters to
     # dashes (+-+).
     #
     # @return [String]
     #
-    def safe_project_name
-      if project.name =~ /\A[a-zA-Z0-9\.\+\-]+\z/
-        project.name.dup
+    def safe_base_package_name
+      if project.package_name =~ /\A[a-z0-9\.\+\-]+\z/
+        project.package_name.dup
       else
-        converted = project.name.gsub(/[^a-zA-Z0-9\.\+\-]+/, '-')
+        converted = project.package_name.downcase.gsub(/[^a-z0-9\.\+\-]+/, '-')
 
         log.warn(log_key) do
-          "The `name' compontent of Debian package names can only include " \
-          "alphabetical characters (a-z, A-Z), numbers (0-9), dots (.), " \
-          "plus signs (+), and dashes (-). Converting `#{project.name}' to " \
+          "The `name' component of Debian package names can only include " \
+          "lower case alphabetical characters (a-z), numbers (0-9), dots (.), " \
+          "plus signs (+), and dashes (-). Converting `#{project.package_name}' to " \
           "`#{converted}'."
         end
 
@@ -338,7 +342,7 @@ module Omnibus
     end
 
     #
-    # This is actually just the regular build_iternation, but it felt lonely
+    # This is actually just the regular build_iteration, but it felt lonely
     # among all the other +safe_*+ methods.
     #
     # @return [String]
@@ -348,21 +352,38 @@ module Omnibus
     end
 
     #
-    # Return the Debian-ready version, converting any invalid characters to
-    # dashes (+-+).
+    # Return the Debian-ready version, replacing all dashes (+-+) with tildes
+    # (+~+) and converting any invalid characters to underscores (+_+).
     #
     # @return [String]
     #
     def safe_version
-      if project.build_version =~ /\A[a-zA-Z0-9\.\+\-\:]+\z/
-        project.build_version.dup
-      else
-        converted = project.build_version.gsub(/[^a-zA-Z0-9\.\+\-\:]+/, '-')
+      version = project.build_version.dup
+
+      if version =~ /\-/
+        converted = version.gsub('-', '~')
 
         log.warn(log_key) do
-          "The `version' compontent of Debian package names can only include " \
+          "Dashes hold special significance in the Debian package versions. " \
+          "Versions that contain a dash and should be considered an earlier " \
+          "version (e.g. pre-releases) may actually be ordered as later " \
+          "(e.g. 12.0.0-rc.6 > 12.0.0). We'll work around this by replacing " \
+          "dashes (-) with tildes (~). Converting `#{project.build_version}' " \
+          "to `#{converted}'."
+        end
+
+        version = converted
+      end
+
+      if version =~ /\A[a-zA-Z0-9\.\+\:\~]+\z/
+        version
+      else
+        converted = version.gsub(/[^a-zA-Z0-9\.\+\:\~]+/, '_')
+
+        log.warn(log_key) do
+          "The `version' component of Debian package names can only include " \
           "alphabetical characters (a-z, A-Z), numbers (0-9), dots (.), " \
-          "plus signs (+), dashes (-), and colons (:). Converting " \
+          "plus signs (+), dashes (-), tildes (~) and colons (:). Converting " \
           "`#{project.build_version}' to `#{converted}'."
         end
 
@@ -381,6 +402,21 @@ module Omnibus
         'amd64'
       when 'i386', 'i486', 'i686'
         'i386'
+      when /armv\dl/
+        if Ohai['platform'] == 'raspbian' || Ohai['platform'] == 'ubuntu'
+          'armhf'
+        else
+          Ohai['kernel']['machine']
+        end
+      when 'aarch64'
+        # Debian prefers amd64 on ARMv8/AArch64 (64bit ARM) platforms
+        # see https://wiki.debian.org/Arm64Port
+        'arm64'
+      when 'ppc64le'
+        # Debian prefers to use ppc64el for little endian architecture name
+        # where as others like gnutools/rhel use ppc64le( note the last 2 chars)
+        # see http://linux.debian.ports.powerpc.narkive.com/8eeWSBtZ/switching-ppc64el-port-name-to-ppc64le
+        'ppc64el'  #dpkg --print-architecture = ppc64el
       else
         Ohai['kernel']['machine']
       end

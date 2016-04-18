@@ -23,6 +23,7 @@ module Omnibus
 
     it_behaves_like 'a cleanroom setter', :name, %|name 'chef'|
     it_behaves_like 'a cleanroom setter', :friendly_name, %|friendly_name 'Chef'|
+    it_behaves_like 'a cleanroom setter', :package_name, %|package_name 'chef.package'|
     it_behaves_like 'a cleanroom setter', :maintainer, %|maintainer 'Chef Software, Inc'|
     it_behaves_like 'a cleanroom setter', :homepage, %|homepage 'https://getchef.com'|
     it_behaves_like 'a cleanroom setter', :description, %|description 'Installs the thing'|
@@ -40,6 +41,13 @@ module Omnibus
     it_behaves_like 'a cleanroom setter', :exclude, %|exclude 'hamlet'|
     it_behaves_like 'a cleanroom setter', :config_file, %|config_file '/path/to/config.rb'|
     it_behaves_like 'a cleanroom setter', :extra_package_file, %|extra_package_file '/path/to/asset'|
+    it_behaves_like 'a cleanroom setter', :text_manifest_path, %|text_manifest_path '/path/to/manifest.txt'|
+    it_behaves_like 'a cleanroom setter', :json_manifest_path, %|json_manifest_path '/path/to/manifest.txt'|
+    it_behaves_like 'a cleanroom setter', :build_git_revision, %|build_git_revision 'wombats'|
+    it_behaves_like 'a cleanroom getter', :files_path
+    it_behaves_like 'a cleanroom setter', :license, %|license 'Apache 2.0'|
+    it_behaves_like 'a cleanroom setter', :license_file, %|license_file 'LICENSES/artistic.txt'|
+    it_behaves_like 'a cleanroom setter', :license_file_path, %|license_file_path 'CHEF_LICENSE'|
 
     describe 'basics' do
       it 'returns a name' do
@@ -122,27 +130,62 @@ module Omnibus
       end
     end
 
+    describe "build_git_revision" do
+      let(:git_repo_subdir_path) do
+        path = local_git_repo("foobar", annotated_tags: ["1.0", "2.0", "3.0"])
+        subdir_path = File.join(path, "asubdir")
+        Dir.mkdir(subdir_path)
+        subdir_path
+      end
+
+      it "returns a revision even when running in a subdir" do
+        Dir.chdir(git_repo_subdir_path) do
+          expect(subject.build_git_revision).to eq("632501dde2c41f3bdd988b818b4c008e2ff398dc")
+        end
+      end
+    end
+
+    describe '#license' do
+      it "sets the default to Unspecified" do
+        expect(subject.license).to eq ('Unspecified')
+      end
+    end
+
+    describe '#license_file_path' do
+      it "sets the default to LICENSE" do
+        expect(subject.license_file_path).to eq ('/sample/LICENSE')
+      end
+    end
+
     describe '#dirty!' do
+      let(:software) { double(Omnibus::Software) }
+
       it 'dirties the cache' do
-        subject.instance_variable_set(:@dirty, nil)
-        subject.dirty!
+        subject.instance_variable_set(:@culprit, nil)
+        subject.dirty!(software)
         expect(subject).to be_dirty
+      end
+
+      it 'sets the culprit' do
+        subject.instance_variable_set(:@culprit, nil)
+        subject.dirty!(software)
+        expect(subject.culprit).to be(software)
       end
     end
 
     describe '#dirty?' do
       it 'returns true by default' do
-        subject.instance_variable_set(:@dirty, nil)
+        subject.instance_variable_set(:@culprit, nil)
         expect(subject).to_not be_dirty
       end
 
       it 'returns true when the cache is dirty' do
-        subject.instance_variable_set(:@dirty, true)
+        subject.instance_variable_set(:@culprit, true)
         expect(subject).to be_dirty
       end
 
       it 'returns false when the cache is not dirty' do
-        subject.instance_variable_set(:@dirty, false)
+        subject.instance_variable_set(:@culprit, false)
         expect(subject).to_not be_dirty
       end
     end
@@ -210,6 +253,14 @@ module Omnibus
 
       it 'retrieves the things set through #overrides' do
         subject.override(:thing, version: '6.6.6')
+        expect(subject.override(:thing)[:version]).to eq('6.6.6')
+      end
+
+      it 'symbolizes #overrides' do
+        subject.override('thing', version: '6.6.6')
+        [:thing, 'thing'].each do |thing|
+          expect(subject.override(thing)).not_to be_nil
+        end
         expect(subject.override(:thing)[:version]).to eq('6.6.6')
       end
     end

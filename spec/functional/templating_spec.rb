@@ -9,8 +9,8 @@ module Omnibus
     subject { RandomClass.new }
 
     describe '#render_template' do
-      let(:source)      { "#{tmp_path}/source.erb" }
-      let(:destination) { "#{tmp_path}/final" }
+      let(:source)      { File.join(tmp_path, 'source.erb') }
+      let(:destination) { File.join(tmp_path, 'final') }
       let(:mode)        { 0644 }
       let(:variables)   { { name: 'Name' } }
       let(:contents) do
@@ -40,19 +40,18 @@ module Omnibus
 
         it 'renders adjacent, without the erb extension' do
           subject.render_template(source, options)
-          expect("#{tmp_path}/source").to be_a_file
+          expect(File.join(tmp_path, 'source')).to be_a_file
         end
       end
 
       context 'when a destination is given' do
-
         it 'renders at the destination' do
           subject.render_template(source, options)
           expect(destination).to be_a_file
         end
       end
 
-      context 'when a mode is given' do
+      context 'when a mode is given', :not_supported_on_windows do
         let(:mode) { 0755 }
 
         it 'renders the object with the mode' do
@@ -65,7 +64,19 @@ module Omnibus
         let(:contents) { "<%= not_a_real_variable %>" }
 
         it 'raise an exception' do
-          expect { subject.render_template(source, options) }.to raise_error
+          expect do
+            subject.render_template(source, options)
+          end.to raise_error(NameError)
+        end
+      end
+
+      context 'when no variables are present' do
+        let(:content)   { "static content" }
+        let(:variables) { {} }
+
+        it 'renders the template' do
+          subject.render_template(source, options)
+          expect(destination).to be_a_file
         end
       end
     end

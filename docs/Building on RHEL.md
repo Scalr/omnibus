@@ -19,6 +19,7 @@ The following Project values are taken into consideration when building RPMs:
 - `extra_package_files`
 - `iteration`
 - `maintainer`
+- `package_name`
 - `package_user`
 - `package_group`
 - `package_scripts_path`
@@ -30,9 +31,9 @@ These options are further described in the [`Project` documentation](http://ruby
 
 These values are interpolated and evaluated using Omnibus' internal RPM templates. For 99% of users, these templates should be satisfactory. If you encounter an instance where Omnibus' RPM templates do not satisfy a use case, please open an issue.
 
-Because of the unlikelihood of their necessity, Omnibus does not generate rpm-related assets. If you find yourself in a situation where you need to generate highly-customized RPM assets, run the Omnibus generator command with the `--rpm-assets` flag:
+Because of the unlikelihood of their necessity, Omnibus does not generate rpm-related assets. If you find yourself in a situation where you need to generate highly-customized RPM assets, run the Omnibus new command with the `--rpm-assets` flag:
 
-    $ omnibus generate NAME --rpm-assets
+    $ omnibus new NAME --rpm-assets
 
 **If this is an existing project, be sure to answer "NO" when asked if you want to overwrite existing files!**
 
@@ -61,6 +62,12 @@ Some DSL methods available include:
 | DSL Method           | Description                                 |
 | :------------------: | --------------------------------------------|
 | `signing_passphrase` | The passphrase to sign the RPM with         |
+| `vendor`             | The name of the package producer            |
+| `license`            | The default license for the package         |
+| `priority`           | The priority for the package                |
+| `category`           | The category for this package               |
+
+If you are unfamilar with any of these terms, you should just accept the defaults. For more information on the purpose of any of these configuration options, please see the RPM spec.
 
 For more information, please see the [`Packager::RPM` documentation](http://rubydoc.info/github/opscode/omnibus/Omnibus/Packager/RPM).
 

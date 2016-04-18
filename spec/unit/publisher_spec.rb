@@ -42,6 +42,85 @@ module Omnibus
       it 'returns an array of Package objects' do
         expect(subject.packages.first).to be_a(Package)
       end
+
+      context 'a platform mappings matrix is provided' do
+        let(:options) do
+          {
+            platform_mappings: {
+              'ubuntu-12.04' => [
+                'ubuntu-12.04',
+                'ubuntu-14.04',
+              ],
+            },
+          }
+        end
+
+        let(:package) do
+          Package.new('/path/to/files/chef.deb')
+        end
+
+        let(:metadata) do
+          Metadata.new(package,
+            name: 'chef',
+            friendly_name: 'Chef',
+            homepage: 'https://www.getchef.com',
+            version: '11.0.6',
+            iteration: 1,
+            basename: 'chef.deb',
+            platform: 'ubuntu',
+            platform_version: '12.04',
+            arch: 'x86_64',
+            sha1: 'SHA1',
+            md5: 'ABCDEF123456',
+          )
+        end
+
+        before do
+          allow(package).to receive(:metadata).and_return(metadata)
+          allow(FileSyncer).to receive_message_chain(:glob, :map).and_return([package])
+        end
+
+        it 'creates a package for each publish platform' do
+          expect(subject.packages.size).to eq(2)
+          expect(
+            subject.packages.map do |p|
+              p.metadata[:platform_version]
+            end
+          ).to include('12.04', '14.04')
+        end
+
+        context 'the build platform does not exist' do
+          let(:options) do
+            {
+              platform_mappings: {
+                'ubuntu-10.04' => [
+                  'ubuntu-12.04',
+                  'ubuntu-14.04',
+                ],
+              },
+            }
+          end
+
+          it 'prints a warning' do
+            output = capture_logging { subject.packages }
+            expect(output).to include('Could not locate a package for build platform ubuntu-10.04. Publishing will be skipped for: ubuntu-12.04, ubuntu-14.04')
+          end
+        end
+      end
+
+      context 'there are no packages to publish' do
+        before do
+          allow(FileSyncer).to receive(:glob)
+            .with(pattern)
+            .and_return([])
+        end
+
+        it 'prints a warning' do
+          output = capture_logging { subject.packages }
+          expect(output).to include('No packages found, skipping publish')
+        end
+      end
+
     end
 
     describe '#publish' do
