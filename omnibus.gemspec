@@ -26,11 +26,10 @@ Gem::Specification.new do |gem|
   # dependency on multipart-post (~> 1.1.4)
   gem.add_dependency 'chef-sugar',       '~> 3.3'
   gem.add_dependency 'cleanroom',        '~> 1.0'
-  gem.add_dependency 'mixlib-shellout',  '~> 2.0'
   gem.add_dependency 'mixlib-versioning'
   gem.add_dependency 'ffi',              '1.9.10'
   gem.add_dependency 'ffi-yajl',         '2.3.0'
-  gem.add_dependency 'mixlib-shellout',   '2.2.7'
+  gem.add_dependency 'mixlib-shellout',  '2.2.7'
   gem.add_dependency 'ohai',             '~> 8.0'
   gem.add_dependency 'ruby-progressbar', '~> 1.7'
   gem.add_dependency 'aws-sdk',          '~> 2'
