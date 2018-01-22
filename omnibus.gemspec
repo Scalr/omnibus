@@ -29,7 +29,6 @@ Gem::Specification.new do |gem|
   gem.add_dependency 'aws-sigv4',           '1.0.2'
   gem.add_dependency 'jmespath',            '1.3.1'
   gem.add_dependency 'backports',           '3.11.0'
-  gem.add_dependency 'bundler',             '1.15.4'
   gem.add_dependency 'fuzzyurl',            '0.9.0'
   gem.add_dependency 'mixlib-config',       '2.2.4'
   gem.add_dependency 'ffi',                 '1.9.10'
